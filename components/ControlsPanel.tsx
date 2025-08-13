@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { PixelationSettings } from '../types';
 import { Slider } from './Slider';
@@ -68,9 +67,9 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = ({
               enabled={settings.showPixelNumbers}
               onChange={(enabled) => handleSettingChange('showPixelNumbers', enabled)}
             />
-            {settings.pixelSize < 8 && settings.showPixelNumbers && (
+            {settings.pixelSize < 24 && settings.showPixelNumbers && (
                 <p className="text-xs text-gray-400 text-right pt-1">
-                    Visible for Pixel Size ≥ 8px
+                    Visible for Pixel Size ≥ 24px
                 </p>
             )}
         </div>

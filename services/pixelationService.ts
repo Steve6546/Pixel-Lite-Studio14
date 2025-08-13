@@ -1,4 +1,3 @@
-
 import { PixelationOptions } from '../types';
 
 interface Color {
@@ -146,22 +145,20 @@ export const pixelateImage = async (options: PixelationOptions): Promise<{ dataU
       }
     }
 
-    if (showPixelNumbers && pixelSize >= 8) {
+    if (showPixelNumbers && pixelSize >= 24) {
       const scaledPixelWidth = image.width / smallWidth;
       const scaledPixelHeight = image.height / smallHeight;
 
-      outputCtx.font = "6px monospace";
+      outputCtx.font = "8px monospace";
       outputCtx.fillStyle = "rgba(255, 255, 255, 0.5)";
       outputCtx.textAlign = 'center';
       outputCtx.textBaseline = 'middle';
 
-      let count = 0;
       for (let y = 0; y < smallHeight; y++) {
         for (let x = 0; x < smallWidth; x++) {
           const centerX = (x + 0.5) * scaledPixelWidth;
           const centerY = (y + 0.5) * scaledPixelHeight;
-          outputCtx.fillText(String(count), centerX, centerY);
-          count++;
+          outputCtx.fillText(`${x},${y}`, centerX, centerY);
         }
       }
     }
