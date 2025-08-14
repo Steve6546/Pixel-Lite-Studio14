@@ -4,13 +4,23 @@ import { ControlsPanel } from './components/ControlsPanel';
 import { ImageUploader } from './components/ImageUploader';
 import { ImageViewer } from './components/ImageViewer';
 import { pixelateImage } from './services/pixelationService';
-import { PixelationSettings } from './types';
+import { generatePaletteFromImage } from './services/paletteService';
+import { PixelationSettings, Color } from './types';
 import { GithubIcon } from './components/icons';
 
 interface Dimensions {
   width: number;
   height: number;
 }
+
+const hexToRgb = (hex: string): Color | null => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16),
+  } : null;
+};
 
 const App: React.FC = () => {
   const [originalImageFile, setOriginalImageFile] = useState<File | null>(null);
@@ -22,11 +32,17 @@ const App: React.FC = () => {
     dithering: true,
     showGrid: false,
     showPixelNumbers: false,
+    useAiPalette: false,
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [originalDimensions, setOriginalDimensions] = useState<Dimensions | null>(null);
   const [pixelatedDimensions, setPixelatedDimensions] = useState<Dimensions | null>(null);
+
+  // AI Palette State
+  const [palettePrompt, setPalettePrompt] = useState<string>('cinematic, vibrant, and moody');
+  const [aiPalette, setAiPalette] = useState<string[] | null>(null);
+  const [isGeneratingPalette, setIsGeneratingPalette] = useState<boolean>(false);
 
 
   const handleImageUpload = (file: File) => {
@@ -36,6 +52,7 @@ const App: React.FC = () => {
     setOriginalImageUrl(URL.createObjectURL(file));
     setOriginalDimensions(null);
     setPixelatedDimensions(null);
+    setAiPalette(null); // Reset AI palette on new image
   };
 
   const processImage = useCallback(async () => {
@@ -54,10 +71,16 @@ const App: React.FC = () => {
         };
         image.onerror = (err) => reject(new Error('Failed to load image.'));
       });
+
+      let customPalette: Color[] | null = null;
+      if (settings.useAiPalette && aiPalette) {
+        customPalette = aiPalette.map(hex => hexToRgb(hex)).filter(c => c !== null) as Color[];
+      }
       
       const { dataUrl, width, height } = await pixelateImage({
         image,
         ...settings,
+        customPalette,
       });
       setPixelatedImageUrl(dataUrl);
       setPixelatedDimensions({ width, height });
@@ -67,15 +90,41 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [originalImageFile, settings]);
+  }, [originalImageFile, settings, aiPalette]);
 
   useEffect(() => {
+    if (isGeneratingPalette || !originalImageFile) return;
+    
     const process = async () => {
       await processImage();
     };
     process();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [originalImageFile, settings]);
+  }, [originalImageFile, settings, aiPalette]);
+
+  const handleSettingsChange = (newSettings: PixelationSettings) => {
+    if (settings.useAiPalette && !newSettings.useAiPalette) {
+      setAiPalette(null);
+    }
+    setSettings(newSettings);
+  };
+
+  const handleGeneratePalette = async () => {
+    if (!originalImageFile) return;
+    setIsGeneratingPalette(true);
+    setError(null);
+    try {
+      const palette = await generatePaletteFromImage(originalImageFile, palettePrompt, settings.colorCount);
+      setAiPalette(palette);
+    } catch (e) {
+      console.error(e);
+      setError('Failed to generate AI palette. Please try again or check your prompt.');
+      setSettings(s => ({...s, useAiPalette: false }));
+    } finally {
+      setIsGeneratingPalette(false);
+    }
+  };
+
 
   const handleDownload = () => {
     if (!pixelatedImageUrl) return;
@@ -103,11 +152,16 @@ const App: React.FC = () => {
         <aside className="lg:col-span-3 bg-gray-800/50 rounded-xl p-6 shadow-lg border border-gray-700/50 h-fit">
           <ControlsPanel 
             settings={settings} 
-            onSettingsChange={setSettings}
+            onSettingsChange={handleSettingsChange}
             onDownload={handleDownload}
-            isProcessing={isLoading}
+            isProcessing={isLoading || isGeneratingPalette}
             hasResult={!!pixelatedImageUrl}
             hasImage={!!originalImageFile}
+            palettePrompt={palettePrompt}
+            onPalettePromptChange={setPalettePrompt}
+            onGeneratePalette={handleGeneratePalette}
+            isGeneratingPalette={isGeneratingPalette}
+            aiPalette={aiPalette}
           />
         </aside>
 
@@ -127,6 +181,7 @@ const App: React.FC = () => {
                   setError(null);
                   setOriginalDimensions(null);
                   setPixelatedDimensions(null);
+                  setAiPalette(null);
               }}
               originalDimensions={originalDimensions}
               pixelatedDimensions={pixelatedDimensions}

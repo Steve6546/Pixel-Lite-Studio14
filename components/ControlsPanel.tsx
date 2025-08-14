@@ -1,9 +1,10 @@
+
 import React from 'react';
 import { PixelationSettings } from '../types';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
 import { Button } from './Button';
-import { DownloadIcon } from './icons';
+import { DownloadIcon, SparklesIcon, LoadingSpinner } from './icons';
 
 interface ControlsPanelProps {
   settings: PixelationSettings;
@@ -12,6 +13,11 @@ interface ControlsPanelProps {
   isProcessing: boolean;
   hasResult: boolean;
   hasImage: boolean;
+  palettePrompt: string;
+  onPalettePromptChange: (prompt: string) => void;
+  onGeneratePalette: () => void;
+  isGeneratingPalette: boolean;
+  aiPalette: string[] | null;
 }
 
 export const ControlsPanel: React.FC<ControlsPanelProps> = ({
@@ -21,6 +27,11 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = ({
   isProcessing,
   hasResult,
   hasImage,
+  palettePrompt,
+  onPalettePromptChange,
+  onGeneratePalette,
+  isGeneratingPalette,
+  aiPalette,
 }) => {
   const handleSettingChange = <K extends keyof PixelationSettings,>(
     key: K,
@@ -29,10 +40,12 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = ({
     onSettingsChange({ ...settings, [key]: value });
   };
 
+  const isUiDisabled = !hasImage || isProcessing;
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-white border-b border-gray-600 pb-2">Controls</h2>
-      <fieldset disabled={!hasImage || isProcessing} className="space-y-6 disabled:opacity-50 transition-opacity">
+      <fieldset disabled={isUiDisabled} className="space-y-6 disabled:opacity-50 transition-opacity">
         <Slider
           label="Pixel Size"
           min={2}
@@ -45,12 +58,53 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = ({
         <Slider
           label="Color Palette"
           min={2}
-          max={64}
+          max={32}
           step={1}
           value={settings.colorCount}
           onChange={(e) => handleSettingChange('colorCount', e.target.valueAsNumber)}
-          unit="colors"
+          unit={settings.useAiPalette ? "AI colors" : "colors"}
         />
+
+        <Toggle
+          label="AI Palette"
+          enabled={settings.useAiPalette}
+          onChange={(enabled) => handleSettingChange('useAiPalette', enabled)}
+        />
+        {settings.useAiPalette && (
+            <div className="pl-4 ml-1 border-l-2 border-indigo-500/30 space-y-4 transition-all duration-300">
+                <div>
+                    <label htmlFor="ai-prompt" className="text-sm font-medium text-gray-300">Palette Prompt</label>
+                    <textarea 
+                        id="ai-prompt"
+                        value={palettePrompt}
+                        onChange={(e) => onPalettePromptChange(e.target.value)}
+                        rows={2}
+                        className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-70"
+                        placeholder="e.g. vaporwave, sunset"
+                    />
+                </div>
+
+                {aiPalette && aiPalette.length > 0 && !isGeneratingPalette && (
+                    <div>
+                        <p className="text-sm font-medium text-gray-300 mb-2">Generated Palette</p>
+                        <div className="flex flex-wrap gap-2">
+                            {aiPalette.map((color) => (
+                                <div key={color} className="w-6 h-6 rounded-full border-2 border-gray-500" style={{ backgroundColor: color }} title={color} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                <Button onClick={onGeneratePalette} disabled={isGeneratingPalette || !palettePrompt.trim()}>
+                  {isGeneratingPalette ? 
+                    <> <LoadingSpinner className="w-5 h-5 mr-2" /> Generating... </> :
+                    <> <SparklesIcon className="w-5 h-5 mr-2" /> {aiPalette ? 'Regenerate' : 'Generate'} Palette </>
+                  }
+                </Button>
+            </div>
+        )}
+
+
         <Toggle
           label="Dithering"
           enabled={settings.dithering}

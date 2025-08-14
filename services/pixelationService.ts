@@ -1,10 +1,5 @@
-import { PixelationOptions } from '../types';
 
-interface Color {
-  r: number;
-  g: number;
-  b: number;
-}
+import { PixelationOptions, Color } from '../types';
 
 const findClosestColor = (color: Color, palette: Color[]): Color => {
   let closestColor = palette[0];
@@ -48,7 +43,7 @@ const generatePalette = (imageData: ImageData, colorCount: number): Color[] => {
 
 export const pixelateImage = async (options: PixelationOptions): Promise<{ dataUrl: string; width: number; height: number; }> => {
   return new Promise((resolve, reject) => {
-    const { image, pixelSize, colorCount, dithering, showGrid, showPixelNumbers } = options;
+    const { image, pixelSize, colorCount, dithering, showGrid, showPixelNumbers, customPalette } = options;
 
     const smallWidth = Math.max(1, Math.floor(image.width / pixelSize));
     const smallHeight = Math.max(1, Math.floor(image.height / pixelSize));
@@ -65,7 +60,7 @@ export const pixelateImage = async (options: PixelationOptions): Promise<{ dataU
     tempCtx.drawImage(image, 0, 0, smallWidth, smallHeight);
 
     const smallImageData = tempCtx.getImageData(0, 0, smallWidth, smallHeight);
-    const palette = generatePalette(smallImageData, colorCount);
+    const palette = customPalette || generatePalette(smallImageData, colorCount);
 
     const data = smallImageData.data;
     const dataCopy = new Float32Array(data.length);
