@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { ControlsPanel } from './components/ControlsPanel';
 import { ImageUploader } from './components/ImageUploader';
 import { ImageViewer } from './components/ImageViewer';
 import { pixelateImage } from './services/pixelationService';
 import { generatePaletteFromImage } from './services/paletteService';
-import { PixelationSettings, Color } from './types';
+import { PixelationSettings, Color, ShapeTransform } from './types';
 import { GithubIcon } from './components/icons';
 
 interface Dimensions {
@@ -22,6 +21,8 @@ const hexToRgb = (hex: string): Color | null => {
   } : null;
 };
 
+const DEFAULT_SHAPE_TRANSFORM: ShapeTransform = { x: 0.5, y: 0.5, scale: 1.0 };
+
 const App: React.FC = () => {
   const [originalImageFile, setOriginalImageFile] = useState<File | null>(null);
   const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
@@ -33,6 +34,8 @@ const App: React.FC = () => {
     showGrid: false,
     showPixelNumbers: false,
     useAiPalette: false,
+    frameShape: 'rectangle',
+    shapeTransform: DEFAULT_SHAPE_TRANSFORM,
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +56,7 @@ const App: React.FC = () => {
     setOriginalDimensions(null);
     setPixelatedDimensions(null);
     setAiPalette(null); // Reset AI palette on new image
+    setSettings(s => ({ ...s, shapeTransform: DEFAULT_SHAPE_TRANSFORM }));
   };
 
   const processImage = useCallback(async () => {
@@ -79,7 +83,13 @@ const App: React.FC = () => {
       
       const { dataUrl, width, height } = await pixelateImage({
         image,
-        ...settings,
+        pixelSize: settings.pixelSize,
+        colorCount: settings.colorCount,
+        dithering: settings.dithering,
+        showGrid: settings.showGrid,
+        showPixelNumbers: settings.showPixelNumbers,
+        frameShape: settings.frameShape,
+        shapeTransform: settings.shapeTransform,
         customPalette,
       });
       setPixelatedImageUrl(dataUrl);
@@ -102,11 +112,16 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [originalImageFile, settings, aiPalette]);
 
-  const handleSettingsChange = (newSettings: PixelationSettings) => {
-    if (settings.useAiPalette && !newSettings.useAiPalette) {
+  const handleSettingsChange = (newSettings: Partial<PixelationSettings>) => {
+    const updatedSettings = { ...settings, ...newSettings };
+    if (settings.useAiPalette && !updatedSettings.useAiPalette) {
       setAiPalette(null);
     }
-    setSettings(newSettings);
+    setSettings(updatedSettings);
+  };
+
+  const handleResetShapeTransform = () => {
+    handleSettingsChange({ shapeTransform: DEFAULT_SHAPE_TRANSFORM });
   };
 
   const handleGeneratePalette = async () => {
@@ -152,7 +167,8 @@ const App: React.FC = () => {
         <aside className="lg:col-span-3 bg-gray-800/50 rounded-xl p-6 shadow-lg border border-gray-700/50 h-fit">
           <ControlsPanel 
             settings={settings} 
-            onSettingsChange={handleSettingsChange}
+            onSettingsChange={(key, value) => handleSettingsChange({ [key]: value })}
+            onResetShapeTransform={handleResetShapeTransform}
             onDownload={handleDownload}
             isProcessing={isLoading || isGeneratingPalette}
             hasResult={!!pixelatedImageUrl}
@@ -185,6 +201,8 @@ const App: React.FC = () => {
               }}
               originalDimensions={originalDimensions}
               pixelatedDimensions={pixelatedDimensions}
+              settings={settings}
+              onSettingsChange={handleSettingsChange}
             />
           )}
         </section>

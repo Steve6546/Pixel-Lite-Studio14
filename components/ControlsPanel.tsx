@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { PixelationSettings } from '../types';
+import { PixelationSettings, FrameShape } from '../types';
 import { Slider } from './Slider';
 import { Toggle } from './Toggle';
 import { Button } from './Button';
@@ -8,7 +7,11 @@ import { DownloadIcon, SparklesIcon, LoadingSpinner } from './icons';
 
 interface ControlsPanelProps {
   settings: PixelationSettings;
-  onSettingsChange: (newSettings: PixelationSettings) => void;
+  onSettingsChange: <K extends keyof PixelationSettings>(
+    key: K,
+    value: PixelationSettings[K]
+  ) => void;
+  onResetShapeTransform: () => void;
   onDownload: () => void;
   isProcessing: boolean;
   hasResult: boolean;
@@ -23,6 +26,7 @@ interface ControlsPanelProps {
 export const ControlsPanel: React.FC<ControlsPanelProps> = ({
   settings,
   onSettingsChange,
+  onResetShapeTransform,
   onDownload,
   isProcessing,
   hasResult,
@@ -37,7 +41,7 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = ({
     key: K,
     value: PixelationSettings[K]
   ) => {
-    onSettingsChange({ ...settings, [key]: value });
+    onSettingsChange(key, value);
   };
 
   const isUiDisabled = !hasImage || isProcessing;
@@ -64,6 +68,29 @@ export const ControlsPanel: React.FC<ControlsPanelProps> = ({
           onChange={(e) => handleSettingChange('colorCount', e.target.valueAsNumber)}
           unit={settings.useAiPalette ? "AI colors" : "colors"}
         />
+
+        <div className="space-y-2">
+            <div className="flex justify-between items-center">
+                <label htmlFor="frame-shape" className="text-sm font-medium text-gray-300">Frame Shape</label>
+                {settings.frameShape !== 'rectangle' && (
+                    <button onClick={onResetShapeTransform} className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
+                        Reset
+                    </button>
+                )}
+            </div>
+            <select
+                id="frame-shape"
+                value={settings.frameShape}
+                onChange={(e) => handleSettingChange('frameShape', e.target.value as FrameShape)}
+                className="block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+            >
+                <option value="rectangle">Rectangle</option>
+                <option value="square">Square</option>
+                <option value="circle">Circle</option>
+                <option value="heart">Heart</option>
+                <option value="star">Star</option>
+            </select>
+        </div>
 
         <Toggle
           label="AI Palette"

@@ -1,5 +1,4 @@
-
-import { PixelationOptions, Color } from '../types';
+import { PixelationOptions, Color, FrameShape, ShapeTransform } from '../types';
 
 const findClosestColor = (color: Color, palette: Color[]): Color => {
   let closestColor = palette[0];
@@ -40,10 +39,47 @@ const generatePalette = (imageData: ImageData, colorCount: number): Color[] => {
     return palette.map(({r,g,b}) => ({r,g,b}));
 };
 
+const applyClipPath = (ctx: CanvasRenderingContext2D, shape: FrameShape, width: number, height: number) => {
+    ctx.beginPath();
+    switch (shape) {
+        case 'circle':
+            ctx.ellipse(width / 2, height / 2, width / 2, height / 2, 0, 0, 2 * Math.PI);
+            break;
+        case 'square':
+            const size = Math.min(width, height);
+            const x = (width - size) / 2;
+            const y = (height - size) / 2;
+            ctx.rect(x, y, size, size);
+            break;
+        case 'heart':
+            const w = width, h = height;
+            ctx.moveTo(w / 2, h * 0.35);
+            ctx.bezierCurveTo(w * 0.7, h * 0.1, w, h * 0.5, w / 2, h);
+            ctx.bezierCurveTo(0, h * 0.5, w * 0.3, h * 0.1, w / 2, h * 0.35);
+            break;
+        case 'star':
+            const outerRadius = Math.min(width, height) / 2;
+            const innerRadius = outerRadius / 2.5;
+            const cx = width / 2;
+            const cy = height / 2;
+            const points = 5;
+            ctx.moveTo(cx, cy - outerRadius);
+            for (let i = 0; i < 2 * points; i++) {
+                const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                const angle = (Math.PI / points) * i - Math.PI / 2;
+                const px = cx + radius * Math.cos(angle);
+                const py = cy + radius * Math.sin(angle);
+                ctx.lineTo(px, py);
+            }
+            break;
+    }
+    ctx.closePath();
+};
+
 
 export const pixelateImage = async (options: PixelationOptions): Promise<{ dataUrl: string; width: number; height: number; }> => {
   return new Promise((resolve, reject) => {
-    const { image, pixelSize, colorCount, dithering, showGrid, showPixelNumbers, customPalette } = options;
+    const { image, pixelSize, colorCount, dithering, showGrid, showPixelNumbers, customPalette, frameShape, shapeTransform } = options;
 
     const smallWidth = Math.max(1, Math.floor(image.width / pixelSize));
     const smallHeight = Math.max(1, Math.floor(image.height / pixelSize));
@@ -57,7 +93,15 @@ export const pixelateImage = async (options: PixelationOptions): Promise<{ dataU
       return reject(new Error('Could not create canvas context.'));
     }
 
-    tempCtx.drawImage(image, 0, 0, smallWidth, smallHeight);
+    // Apply shape transform to crop/zoom the source image
+    const { x: centerX, y: centerY, scale } = shapeTransform;
+    const sWidth = image.width / scale;
+    const sHeight = image.height / scale;
+    const sx = (image.width * centerX) - (sWidth / 2);
+    const sy = (image.height * centerY) - (sHeight / 2);
+
+    tempCtx.drawImage(image, sx, sy, sWidth, sHeight, 0, 0, smallWidth, smallHeight);
+
 
     const smallImageData = tempCtx.getImageData(0, 0, smallWidth, smallHeight);
     const palette = customPalette || generatePalette(smallImageData, colorCount);
@@ -109,6 +153,11 @@ export const pixelateImage = async (options: PixelationOptions): Promise<{ dataU
     
     if (!outputCtx) {
       return reject(new Error('Could not create output canvas context.'));
+    }
+
+    if (frameShape !== 'rectangle') {
+        applyClipPath(outputCtx, frameShape, image.width, image.height);
+        outputCtx.clip();
     }
     
     outputCtx.imageSmoothingEnabled = false;
