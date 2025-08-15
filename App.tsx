@@ -41,6 +41,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [originalDimensions, setOriginalDimensions] = useState<Dimensions | null>(null);
   const [pixelatedDimensions, setPixelatedDimensions] = useState<Dimensions | null>(null);
+  const [resultZoom, setResultZoom] = useState<number>(1);
 
   // AI Palette State
   const [palettePrompt, setPalettePrompt] = useState<string>('cinematic, vibrant, and moody');
@@ -56,6 +57,7 @@ const App: React.FC = () => {
     setOriginalDimensions(null);
     setPixelatedDimensions(null);
     setAiPalette(null); // Reset AI palette on new image
+    setResultZoom(1);
     setSettings(s => ({ ...s, shapeTransform: DEFAULT_SHAPE_TRANSFORM }));
   };
 
@@ -152,6 +154,17 @@ const App: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const handleClear = () => {
+    setOriginalImageFile(null);
+    setOriginalImageUrl(null);
+    setPixelatedImageUrl(null);
+    setError(null);
+    setOriginalDimensions(null);
+    setPixelatedDimensions(null);
+    setAiPalette(null);
+    setResultZoom(1);
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 flex flex-col p-4 sm:p-6 lg:p-8 font-sans">
       <header className="flex justify-between items-center mb-6">
@@ -190,19 +203,13 @@ const App: React.FC = () => {
               pixelatedUrl={pixelatedImageUrl}
               isLoading={isLoading}
               error={error}
-              onClear={() => {
-                  setOriginalImageFile(null);
-                  setOriginalImageUrl(null);
-                  setPixelatedImageUrl(null);
-                  setError(null);
-                  setOriginalDimensions(null);
-                  setPixelatedDimensions(null);
-                  setAiPalette(null);
-              }}
+              onClear={handleClear}
               originalDimensions={originalDimensions}
               pixelatedDimensions={pixelatedDimensions}
               settings={settings}
               onSettingsChange={handleSettingsChange}
+              resultZoom={resultZoom}
+              onResultZoomChange={setResultZoom}
             />
           )}
         </section>

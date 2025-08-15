@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ClearIcon, ErrorIcon, LoadingSpinner } from './icons';
 import { PixelationSettings, FrameShape } from '../types';
+import { ZoomControls } from './ZoomControls';
 
 interface Dimensions {
     width: number;
@@ -17,10 +18,13 @@ interface ImageViewerProps {
   pixelatedDimensions: Dimensions | null;
   settings: PixelationSettings;
   onSettingsChange: (newSettings: Partial<PixelationSettings>) => void;
+  resultZoom: number;
+  onResultZoomChange: (zoom: number) => void;
 }
 
-const drawShape = (ctx: CanvasRenderingContext2D, shape: FrameShape, width: number, height: number) => {
-    ctx.beginPath();
+// Creates a path for the shape on the current context.
+// Does NOT call beginPath() or closePath(). Assumes a clockwise winding order.
+const createShapePath = (ctx: CanvasRenderingContext2D, shape: FrameShape, width: number, height: number) => {
     switch (shape) {
         case 'circle':
             ctx.ellipse(width / 2, height / 2, width / 2, height / 2, 0, 0, 2 * Math.PI);
@@ -53,7 +57,6 @@ const drawShape = (ctx: CanvasRenderingContext2D, shape: FrameShape, width: numb
             }
             break;
     }
-    ctx.closePath();
 };
 
 
@@ -90,7 +93,7 @@ const ImagePanel: React.FC<ImagePanelProps> = ({ title, children, showClear, onC
     </div>
 );
 
-export const ImageViewer: React.FC<ImageViewerProps> = ({ originalUrl, pixelatedUrl, isLoading, error, onClear, originalDimensions, pixelatedDimensions, settings, onSettingsChange }) => {
+export const ImageViewer: React.FC<ImageViewerProps> = ({ originalUrl, pixelatedUrl, isLoading, error, onClear, originalDimensions, pixelatedDimensions, settings, onSettingsChange, resultZoom, onResultZoomChange }) => {
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const interactionState = useRef({ isDragging: false, lastX: 0, lastY: 0 }).current;
@@ -98,13 +101,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ originalUrl, pixelated
   useEffect(() => {
     const canvas = overlayCanvasRef.current;
     const image = imageRef.current;
-    if (!canvas || !image || settings.frameShape === 'rectangle') {
-      if(canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx?.clearRect(0,0, canvas.width, canvas.height);
-      }
-      return;
-    }
+    if (!canvas || !image) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -115,38 +112,43 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ originalUrl, pixelated
         canvas.height = height;
 
         ctx.clearRect(0, 0, width, height);
-        
-        // Draw semi-transparent overlay
-        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-        ctx.fillRect(0, 0, width, height);
 
-        // Save context state
-        ctx.save();
+        if (settings.frameShape === 'rectangle') {
+            return; // No overlay needed for rectangle
+        }
         
-        // Invert the clipping mask
-        ctx.globalCompositeOperation = 'destination-out';
-        
-        // Scale and translate shape
         const { x, y, scale } = settings.shapeTransform;
-        const shapeWidth = width / scale;
-        const shapeHeight = height / scale;
-        const shapeX = x * width - shapeWidth / 2;
-        const shapeY = y * height - shapeHeight / 2;
+        
+        // The base size of the shape is the smaller dimension of the container.
+        // The scale modifies this base size.
+        const baseSize = Math.min(width, height);
+        const shapeSize = baseSize * scale;
 
+        // Position of the shape's top-left corner
+        const shapeX = x * width - shapeSize / 2;
+        const shapeY = y * height - shapeSize / 2;
+
+        // Draw overlay using evenodd fill rule to create a "hole".
+        ctx.save();
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.beginPath();
+        ctx.rect(0, 0, width, height);
+        
         ctx.save();
         ctx.translate(shapeX, shapeY);
-        drawShape(ctx, settings.frameShape, shapeWidth, shapeHeight);
-        ctx.fillStyle = 'white';
-        ctx.fill();
+        createShapePath(ctx, settings.frameShape, shapeSize, shapeSize);
+        ctx.restore();
+        
+        ctx.fill("evenodd");
         ctx.restore();
 
-        // Restore context state
-        ctx.restore();
 
-        // Draw outline of shape
+        // Draw dashed outline of the shape
         ctx.save();
         ctx.translate(shapeX, shapeY);
-        drawShape(ctx, settings.frameShape, shapeWidth, shapeHeight);
+        ctx.beginPath();
+        createShapePath(ctx, settings.frameShape, shapeSize, shapeSize);
+        ctx.closePath();
         ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
@@ -157,8 +159,11 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ originalUrl, pixelated
     const resizeObserver = new ResizeObserver(drawOverlay);
     resizeObserver.observe(image);
     
-    image.onload = drawOverlay;
-    if (image.complete) drawOverlay();
+    if (image.complete) {
+      drawOverlay();
+    } else {
+      image.onload = drawOverlay;
+    }
 
     return () => {
         resizeObserver.disconnect();
@@ -204,10 +209,32 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ originalUrl, pixelated
     onSettingsChange({
       shapeTransform: {
         ...settings.shapeTransform,
-        scale: Math.max(0.2, Math.min(5, settings.shapeTransform.scale + scaleAmount)),
+        scale: Math.max(0.1, Math.min(3, settings.shapeTransform.scale + scaleAmount)),
       }
     });
   };
+  
+  const handleShapeZoom = (direction: 'in' | 'out') => {
+    const scaleAmount = direction === 'in' ? 0.1 : -0.1;
+    onSettingsChange({
+      shapeTransform: {
+        ...settings.shapeTransform,
+        scale: Math.max(0.1, Math.min(3, settings.shapeTransform.scale + scaleAmount)),
+      }
+    });
+  };
+
+  const handleResultZoom = (direction: 'in' | 'out') => {
+    let newZoom = resultZoom;
+    if (direction === 'in') {
+        newZoom = resultZoom < 1 ? 1 : resultZoom + 1;
+    } else { // 'out'
+        newZoom = resultZoom <= 1 ? 0.5 : resultZoom - 1;
+    }
+    // Clamp the zoom level
+    onResultZoomChange(Math.max(0.5, Math.min(10, newZoom)));
+  };
+
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
@@ -227,6 +254,9 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ originalUrl, pixelated
                         onTouchEnd={handleInteractionEnd}
                         onWheel={handleWheel}
                     />
+                    {settings.frameShape !== 'rectangle' && (
+                        <ZoomControls onZoom={handleShapeZoom} />
+                    )}
                 </>
             )}
         </ImagePanel>
@@ -246,7 +276,23 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ originalUrl, pixelated
                 </div>
             )}
             {!isLoading && !error && pixelatedUrl && (
-                <img src={pixelatedUrl} alt="Pixelated" className="max-w-full max-h-full object-contain" style={{ imageRendering: 'pixelated' }} />
+                <>
+                    <img 
+                        src={pixelatedUrl} 
+                        alt="Pixelated" 
+                        className="max-w-full max-h-full object-contain transition-transform duration-200 ease-in-out" 
+                        style={{ 
+                            imageRendering: 'pixelated',
+                            transform: `scale(${resultZoom})` 
+                        }} 
+                    />
+                    <ZoomControls onZoom={handleResultZoom} />
+                    {resultZoom !== 1 && (
+                        <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md pointer-events-none">
+                            {resultZoom}x Zoom
+                        </div>
+                    )}
+                </>
             )}
             {!isLoading && !error && !pixelatedUrl && (
                  <div className="text-center text-gray-500">
